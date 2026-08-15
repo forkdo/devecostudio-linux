@@ -14,7 +14,63 @@
 
 ## 构建
 
-请务必自行检查 `PKGBUILD`。
+本项目有两种构建方式：
+
+- **通用 Linux 压缩包（推荐，Python）**——`scripts/build_generic.py`，见下文。
+- **Arch Linux 软件包**——通过 `makepkg` 构建 `PKGBUILD`，见后面的章节。
+
+构建 Arch 包前请务必自行检查 `PKGBUILD`。
+
+### 通用 Linux 构建（Python）
+
+额外提供一套完全用 **Python**（`scripts/build_generic.py`）编写的、自包含且可重定位的 Linux 发行包。它复刻了 PKGBUILD 的逻辑，但和 IntelliJ IDEA 官方 Linux 压缩包一样，产出一个普通的 `tar.gz`——可以解压到**任意位置**并从 `bin/` 运行，不需要 Arch、`makepkg`，也不会安装到 `/opt` 或 `/usr/bin`。
+
+**同样需要以下三份源码：**
+
+1. **DevEco Studio for Mac**——`devecostudio-mac-<ver>.zip`（内含 `.dmg`）
+2. **Command Line Tools for Linux (x86_64)**——`commandline-tools-linux-x64-<ver>.zip`
+3. **IntelliJ IDEA Linux**——自动下载为 `idea-<ideaver>.tar.gz`
+
+把两个 zip 放在任意位置后运行：
+
+    python3 scripts/build_generic.py \
+        --mac-zip /path/to/devecostudio-mac-<ver>.zip \
+        --cli-zip /path/to/commandline-tools-linux-x64-<ver>.zip
+
+（如果已下载 `idea-<ideaver>.tar.gz`，可加 `--idea-tar` 复用；否则会从 JetBrains CDN 自动下载。）
+
+所有中间构建产物和最终产品都保存在同一个 `build/` 文件夹中：
+
+    build/
+    ├── src/                                    # 解压的源码（中间产物）
+    ├── out/                                    # 构建出的安装目录（中间产物）
+    └── devecostudio-<ver>-linux-x86_64.tar.gz  # 最终产品
+
+如需清理中间构建产物和生成的压缩包（例如重新构建前），可使用 `--clean`：
+
+    python3 scripts/build_generic.py --clean                 # 清理默认 pkgver 产物
+    python3 scripts/build_generic.py --pkgver 6.1.1.300 --clean
+
+最终产品输出到 `build/`：
+
+    build/devecostudio-<ver>-linux-x86_64.tar.gz
+
+解压到任意位置后运行：
+
+    ./devecostudio-<ver>-linux-x86_64/bin/devecostudio.sh
+
+把 `<安装目录>/bin` 加入 `PATH` 即可使用内置 CLI 工具（`hvigorw`、`ohpm`、`hstack`、`hcodelinter`、`hemulator`）——不会写入 `/usr/bin`。详见压缩包内的 `Install-Linux.txt`。
+
+如想为**当前用户**（无需 root）添加启动器、CLI 工具和桌面入口，可用可选辅助脚本：
+
+    python3 scripts/install.py build/devecostudio-<ver>-linux-x86_64
+    python3 scripts/install.py --uninstall
+
+#### 说明
+
+通用构建与 PKGBUILD 是同一移植配方的两种前端。PKGBUILD 仍服务于 Arch 用户；`scripts/build_generic.py` 是推荐的跨发行版路径。
+
+### Arch Linux 软件包（PKGBUILD）
 
 要使用经过测试的 PKGBUILD，请使用已打 tag 的版本——默认分支可能包含未测试的改动：
 

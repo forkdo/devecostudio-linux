@@ -14,7 +14,75 @@ It is not an official package. It is not endorsed by Huawei or JetBrains.
 
 ## Building
 
-Always check `PKGBUILD` yourself.
+There are two ways to build this project:
+
+- **Generic Linux tarball (recommended, Python)** — `scripts/build_generic.py`, see below.
+- **Arch Linux package** — the `PKGBUILD` via `makepkg`, see the later section.
+
+Always check `PKGBUILD` yourself before building the Arch package.
+
+### Generic Linux build (Python)
+
+A self-contained, relocatable Linux distribution is also provided, built
+entirely with **Python** (`scripts/build_generic.py`). It mirrors the
+PKGBUILD's logic but, like IntelliJ IDEA's official Linux tarball, produces a
+plain `tar.gz` you can extract **anywhere** and run from `bin/` — no Arch,
+no `makepkg`, no `/opt` or `/usr/bin` installation.
+
+**You need the same three sources:**
+
+1. **DevEco Studio for Mac** — `devecostudio-mac-<ver>.zip` (contains the `.dmg`)
+2. **Command Line Tools for Linux (x86_64)** — `commandline-tools-linux-x64-<ver>.zip`
+3. **IntelliJ IDEA Linux** — auto-downloaded as `idea-<ideaver>.tar.gz`
+
+Place the two zips anywhere and run:
+
+    python3 scripts/build_generic.py \
+        --mac-zip /path/to/devecostudio-mac-<ver>.zip \
+        --cli-zip /path/to/commandline-tools-linux-x64-<ver>.zip
+
+(If `idea-<ideaver>.tar.gz` is already downloaded, pass `--idea-tar` to reuse
+it; otherwise it is fetched from JetBrains' CDN.)
+
+All intermediate build artifacts and the final product are kept under the
+single `build/` folder:
+
+    build/
+    ├── src/                                    # extracted sources (intermediate)
+    ├── out/                                    # built install tree (intermediate)
+    └── devecostudio-<ver>-linux-x86_64.tar.gz  # final product
+
+To remove the intermediate build artifacts and the produced tarball (e.g.
+before a fresh rebuild), use `--clean`:
+
+    python3 scripts/build_generic.py --clean                 # cleans pkgver (default)
+    python3 scripts/build_generic.py --pkgver 6.1.1.300 --clean
+
+The final product lands in `build/`:
+
+    build/devecostudio-<ver>-linux-x86_64.tar.gz
+
+Extract it wherever you like, then run:
+
+    ./devecostudio-<ver>-linux-x86_64/bin/devecostudio.sh
+
+Add `<install>/bin` to `PATH` to use the bundled CLI tools
+(`hvigorw`, `ohpm`, `hstack`, `hcodelinter`, `hemulator`) — nothing is
+written to `/usr/bin`. See `Install-Linux.txt` inside the tarball for details.
+
+To add the launcher, CLI tools and a desktop entry for your **current user**
+(no root), an optional helper is provided:
+
+    python3 scripts/install.py build/devecostudio-<ver>-linux-x86_64
+    python3 scripts/install.py --uninstall
+
+### Note
+
+The generic build and the PKGBUILD are two front-ends over the same
+porting recipe. The PKGBUILD remains for Arch users; `scripts/build_generic.py`
+is the recommended cross-distro path.
+
+### Arch Linux package (PKGBUILD)
 
 For the tested, release-quality version (of PKGBUILD),
 use a tagged release — the default branch may carry untested changes:

@@ -1,7 +1,8 @@
 # Built package
 *.pkg.tar.zst
 
-# Build artifacts
+# Build artifacts (generic Python build: intermediates + product under build/)
+build/
 src/
 pkg/
 *.log
@@ -9,3 +10,8 @@ pkg/
 # Manually downloaded sources (must be provided by user)
 *.zip
 idea-*.tar.gz
+*.dmg
+
+# Python
+__pycache__/
+*.pyc
