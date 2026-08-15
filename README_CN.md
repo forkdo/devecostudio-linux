@@ -37,6 +37,20 @@ Tag 名中的版本号也是该 PKGBUILD 的 `pkgver`，即下方需要下载的
 
 IntelliJ IDEA 的 tarball 会自动从 JetBrains CDN 下载。
 
+> **版本要求（硬性前提）：** 本包**仅支持 DevEco Studio 26.0.0 及以上**。
+> 这不是软性建议——旧版本不被支持，`build.sh` 这套方式对它们根本不可用。
+>
+> 定为硬性下限的原因有两点：
+> 1. **模拟器支持。** 26.0.0 之前的版本在本打包方案下不支持模拟器，而模拟器
+>    正是本包要提供的核心能力之一，因此旧版本从根本上就不兼容。
+> 2. **文件布局不同。** 早期版本（如 `6.1.1`、`5.x`）的文件布局不同——扁平化的
+>    `lib/`、`skiko-awt-runtime-all` 目录、`tools/dumpParser` 的 Mach-O 排除，
+>    以及 PKGBUILD 锁定的 IDEA 基线——本包并不处理。用旧版本会导致构建失败
+>    或安装残缺。
+>
+> 请使用 26.0.0+ 的 Mac DMG 与 Command Line Tools，否则构建会失败。如果必须
+> 使用更老的 DevEco Studio，本包不适合你。
+
 `pkgver` 中的版本及其 SHA256 校验值是作者测试过的。要使用其他版本：
 
 1. 查看 PKGBUILD 中期望的文件名（文件名不含版本号，只需重命名一次下载文件），
@@ -56,7 +70,7 @@ IntelliJ IDEA 的 tarball 会自动从 JetBrains CDN 下载。
    - `mac_zip_url` — Mac zip 的 URL
    - `cli_zip_url` — Linux Command Line Tools zip 的 URL
 5. 可选地覆盖版本号和校验值（留空则使用 `PKGBUILD` 中的值）：
-   - `pkgver` — 例如 `6.1.1.280`
+   - `pkgver` — 例如 `26.0.0.621`（必须是 26.0.0 或更高版本）
    - `mac_zip_sha256` / `cli_zip_sha256` — 两个 zip 的 SHA256；未测试过的版本可用 `SKIP` 跳过校验
 6. 运行结束后，从运行页面下载 `devecostudio-pkg` artifact，并在本地安装：
 

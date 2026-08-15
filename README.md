@@ -43,6 +43,23 @@ Then:
 
 The IntelliJ IDEA tarball is fetched automatically from JetBrains' CDN.
 
+> **Version requirement (hard requirement):** this package works only with
+> **DevEco Studio 26.0.0 or newer**. It is not a soft suggestion — older
+> releases are unsupported and the build script will not work with them.
+>
+> Two reasons make this a hard floor:
+> 1. **Emulator support.** Versions before 26.0.0 do not support the emulator
+>    on this packaging approach at all, which is a core part of what this
+>    package provides. Older releases are therefore fundamentally incompatible.
+> 2. **Different layout.** Early releases (e.g. `6.1.1`, `5.x`) ship a
+>    different file layout — flattened `lib/`, the `skiko-awt-runtime-all`
+>    directory, the `tools/dumpParser` Mach-O exclusion, and the IDEA baseline
+>    the PKGBUILD pins — that this package does not handle. Using one produces
+>    a failed or broken build.
+>
+> Use a 26.0.0+ Mac DMG and Command Line Tools, or the build will fail.
+> If you must use an older DevEco Studio, this package is not for you.
+
 The version in `pkgver` and its SHA256 checksums are what the author tested.
 To use a different version:
 
@@ -65,7 +82,7 @@ GitHub Actions:
    - `mac_zip_url` — URL of the Mac zip
    - `cli_zip_url` — URL of the Linux Command Line Tools zip
 5. Optionally override the version and checksums (leave empty to keep the values in `PKGBUILD`):
-   - `pkgver` — e.g. `6.1.1.280`
+   - `pkgver` — e.g. `26.0.0.621` (must be 26.0.0 or newer)
    - `mac_zip_sha256` / `cli_zip_sha256` — SHA256 of the two zips; use `SKIP` to skip verification for an untested version
 6. When the run finishes, download the `devecostudio-pkg` artifact from the run page and install it locally:
 

@@ -79,6 +79,29 @@ if [[ ! -f "$_emu_config" ]]; then
 fi
 ```
 
+### Device Manager GUI on Linux (known limitation, and a destructive trap)
+
+DevEco's **Device Manager** GUI depends on Huawei-cloud device templates
+that are not shipped with the Linux build. On Linux the panel's
+"Local Emulators / My Devices" list is therefore **blank** — you cannot
+create or pick a device there. Use the CLI instead (the wrapper handles
+paths and xcb):
+
+```bash
+tools/bin/Emulator -create myPhone -deviceType phone -osVersion "HarmonyOS 6.1.1(24)"
+tools/bin/Emulator -start  myPhone
+tools/bin/Emulator -stop   myPhone
+tools/bin/Emulator -list
+```
+
+**Destructive trap**: opening the IDE's Device Manager (or otherwise
+triggering its device scan) can **wipe the `deployed/` directory** under
+`~/.Huawei/Emulator/` and discard CLI-created devices (e.g. `myPhone/`,
+`myPhone.ini`, `lists.json`), leaving only placeholder files. The CLI
+`Emulator -list` then reports `[Empty]`. If you must keep CLI-created
+devices, **do not open the IDE Device Manager**; recover by restoring
+`~/.Huawei/Emulator/deployed/` from backup, or just re-run `-create`.
+
 Only **existence** is checked, not content — so users can opt out of the
 auto-accept by truncating the file (`> .emu_config`), which makes the
 wrapper pass through and let the emulator handle agreements itself. Note
@@ -251,6 +274,25 @@ leaving helpers (e.g. `jbr/lib/jspawnhelper`, `emulator/Emulator`,
 `tools/node/bin/node`) without +x, which broke child-process spawning
 (`posix_spawn: EACCES`) — one of the classic "works until you run
 something" bugs.
+
+**Critical ordering trap**: `fix_permissions` must run **after** the IDEA
+JBR tree is copied into `$pkg`. JBR's `jbr/bin/java` (and every other
+ELF under `jbr/`, e.g. `jspawnhelper`, `cef_server`) is what the native
+launcher execs to boot the JVM — if `java` is not executable, the IDE
+fails at startup with *"Cannot find a runtime / Runtime not found"*. The
+IDEA tarball's extracted files sometimes lack +x, and `cp -a` preserves
+that. So `fix_permissions` must scan the tree **last** (after the JBR copy
+at `assemble()`), never before it.
+
+The **same** trap applies to the **SDK** tree (`cp_tree "$cli/sdk/."`):
+the SDK ships Linux-native Ark compiler binaries under
+`ets/build-tools/.../bin/ark/build/bin/` — `es2abc`, `ark_aot_compiler`,
+`merge_abc`, `profdump`, `panda_guard`, `js2abc` — which hvigor execs
+during `CompileArkTS`. If they lack +x, the build fails with
+*"/bin/sh: ... es2abc: 权限不够"* (EACCES). The SDK copy must therefore
+also happen **before** `fix_permissions`. In `assemble()`, all of
+JBR / native libs / SDK are copied first, then `fix_permissions` runs once
+over the whole tree.
 
 ### Strip
 

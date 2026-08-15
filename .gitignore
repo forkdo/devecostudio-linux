@@ -4,8 +4,10 @@
 # Build artifacts
 src/
 pkg/
+build/
 *.log
 
 # Manually downloaded sources (must be provided by user)
 *.zip
 idea-*.tar.gz
+__pycache__/
