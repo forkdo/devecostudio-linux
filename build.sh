@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
-#
+
+#============================================================
+# File: build.sh
+# Description: 构建跨发行版、解压即用的 DevEco Studio 通用 tarball
+# URL: https://fx4.cn/devecobuild
+# Author: Jetsung Chan <i@jetsung.com>
+# Version: 0.1.0
+# CreatedAt: 2026-08-16
+# UpdatedAt: 2026-08-16
+#============================================================
+
 # build.sh — 构建跨发行版、解压即用的 DevEco Studio 通用 tarball。
 #
 # 取代原 Arch PKGBUILD：不再产出 *.pkg.tar.zst，而是产出自包含的
@@ -24,7 +34,7 @@ fi
 # 配置
 # --------------------------------------------------------------------------- #
 DEFAULT_PKGVER="26.0.0.621"
-DEFAULT_IDEAVER="2026.1.3"
+DEFAULT_IDEAVER="2026.2.1"
 IDEA_URL_TEMPLATE="https://download.jetbrains.com/idea/idea-%s.tar.gz"
 HPREFIX_GENERIC_TOOLS=1 # 暴露 CLI 工具时 codelinter/Emulator 加 h 前缀
 
