@@ -1,283 +1,286 @@
-# DevEco Studio — Linux PKGBUILD
+# DevEco Studio — 通用发行版构建脚本（build.sh）
 
-**English** | [`中文`](README_CN.md)
-
-<p align="center">
-  <img src=".github/images/screenshot.png" alt="screenshot" width="80%" />
-</p>
-
-Thanks to [Cris.Q](https://crisq.top/blog/deveco_linux_porting_notes) for the original porting notes that inspired this project.
-
-This is an Arch Linux PKGBUILD that packages DevEco Studio (Huawei's IDE for HarmonyOS development) from its Mac DMG distribution, bringing it to Linux with the help of JetBrains' IntelliJ IDEA native launcher and JBR.
-
-It is not an official package. It is not endorsed by Huawei or JetBrains.
-
-## Building
-
-Always check `PKGBUILD` yourself.
-
-For the tested, release-quality version (of PKGBUILD),
-use a tagged release — the default branch may carry untested changes:
-
-    git checkout <latest-tag>
-
-(replace `<latest-tag>` with the newest tag, e.g. `26.0.0.621-7` — list
-them with `git tag`).
-
-The version in the tag is the `pkgver` in that PKGBUILD — i.e. the DevEco
-Studio version you should download below (e.g. `26.0.0.621`).
-
-### Locally with makepkg
-
-You will need to manually download two files from Huawei's website:
-
-1. **DevEco Studio ${pkgver} for Mac**
-2. **Command Line Tools for Linux (x86_64) ${pkgver}**
-
-Place both `.zip` files next to the PKGBUILD, **renamed** to the fixed
-filenames the PKGBUILD expects — `devecostudio-mac.zip` and
-`commandline-tools-linux-x64.zip` (the names are version-independent).
-Then:
-
-    makepkg -si
-
-The IntelliJ IDEA tarball is fetched automatically from JetBrains' CDN.
-
-> **Version requirement (hard requirement):** this package works only with
-> **DevEco Studio 26.0.0 or newer**. It is not a soft suggestion — older
-> releases are unsupported and the build script will not work with them.
+> 跨发行版、解压即用的 DevEco Studio 通用 tarball 构建器。
+> 基于华为 Mac DMG + Linux 命令行工具 + IntelliJ IDEA 的 Linux 组件重新组合。
 >
-> Two reasons make this a hard floor:
-> 1. **Emulator support.** Versions before 26.0.0 do not support the emulator
->    on this packaging approach at all, which is a core part of what this
->    package provides. Older releases are therefore fundamentally incompatible.
-> 2. **Different layout.** Early releases (e.g. `6.1.1`, `5.x`) ship a
->    different file layout — flattened `lib/`, the `skiko-awt-runtime-all`
->    directory, the `tools/dumpParser` Mach-O exclusion, and the IDEA baseline
->    the PKGBUILD pins — that this package does not handle. Using one produces
->    a failed or broken build.
->
-> Use a 26.0.0+ Mac DMG and Command Line Tools, or the build will fail.
-> If you must use an older DevEco Studio, this package is not for you.
+> Arch Linux 专用打包（PKGBUILD）已移至 [`arch/`](arch/) 目录。本文件描述
+> 全新的 `build.sh` 通用构建脚本。
 
-The version in `pkgver` and its SHA256 checksums are what the author tested.
-To use a different version:
+`build.sh` 把三个上游源重新组合成一个**解压即用**的目录树（类似
+`idea-*.tar.gz` / `android-studio-*.tar.gz`）：
 
-1. Check the PKGBUILD for the expected filenames (they don't contain a version, so you only rename your downloads once),
-2. Download the version you want, rename it to the fixed filenames, then update `pkgver` and the two SHA256 checksums (or set them to `"SKIP"` if you'd rather skip verification),
-3. You can also change `_ideaver` for a different IDEA base.
+- 解压到**任意位置**（如 `~/apps`、`/opt`）即可运行，**不绑定 `/opt`**；
+- 启动入口为 `<解压目录>/bin/devecostudio.sh`，内部用 `readlink -f` 解析自身，
+  因此放哪都能跑；
+- **不再需要 `.desktop` 文件**（自包含目录自带图标与启动逻辑）。
 
-Only the versions in `pkgver` have been tested — if you modify them, test
-the result yourself.
+所有平台相关的逆向/适配细节见 [`AGENTS.md`](AGENTS.md)。
 
-### With GitHub Actions
+## 三个上游源
 
-If you don't have an Arch machine at hand, the same build can be run in
-GitHub Actions:
-
-1. **Fork** this repository (the workflow is triggered manually), or use your own fork of it.
-2. Open the **Actions** tab, select the **Build DevEco Studio PKGBUILD** workflow and click **Run workflow**.
-3. Optionally, "Use workflow from" a tagged release.
-4. Fill in the two download URLs (Huawei links expire, so you need fresh ones from the [download page](https://developer.huawei.com/consumer/cn/deveco-studio/) each time):
-   - `mac_zip_url` — URL of the Mac zip
-   - `cli_zip_url` — URL of the Linux Command Line Tools zip
-5. Optionally override the version and checksums (leave empty to keep the values in `PKGBUILD`):
-   - `pkgver` — e.g. `26.0.0.621` (must be 26.0.0 or newer)
-   - `mac_zip_sha256` / `cli_zip_sha256` — SHA256 of the two zips; use `SKIP` to skip verification for an untested version
-6. When the run finishes, download the `devecostudio-pkg` artifact from the run page and install it locally:
-
-       sudo pacman -U devecostudio-*.pkg.tar.zst
-
-A GitHub account can use Actions for free on public repositories.
-
-### On other distributions
-
-The workflow also produces a distro-agnostic tarball
-(`devecostudio-<ver>-linux-x86_64.tar.gz`) containing the complete
-`/opt/devecostudio` tree plus `devecostudio.desktop` at the root. On
-Debian/Ubuntu/Fedora or any other Linux, extract it and set up the launcher
-manually:
-
-    sudo tar -xzf devecostudio-<ver>-linux-x86_64.tar.gz -C /opt
-    sudo ln -s /opt/devecostudio/bin/devecostudio.sh /usr/local/bin/devecostudio
-    sudo desktop-file-install /opt/devecostudio.desktop
-
-You also need the runtime dependencies (package names vary by distro):
-`libxss`, `libxtst`, `nss`, `alsa-lib`, `libxcrypt-compat`, `freetype2`,
-`libpulse`. Chinese input support needs `fcitx5`. Unlike the Arch package,
-the bundled CLI tools are not linked into `/usr/bin` — call them by full
-path under `/opt/devecostudio/tools/bin/`.
-
-## CLI tools on PATH
-
-The IDE needs the bundled Huawei command-line tools at runtime, and they
-also work standalone from a terminal. By default the package symlinks them
-into `/usr/bin`:
-
-| `/usr/bin` entry | Tool | Note |
+| 源 | 内容 | 来源 |
 |---|---|---|
-| `devecostudio` | IDE launcher | always installed |
-| `hvigorw` | build tool | Huawei-specific name, exposed as-is |
-| `ohpm` | package manager | Huawei-specific name, exposed as-is |
-| `hstack` | toolchain helper | Huawei-specific name, exposed as-is |
-| `hcodelinter` | code linter | prefixed with `h` to avoid collisions |
-| `hemulator` | emulator CLI | prefixed with `h` to avoid collisions |
+| `devecostudio-mac-<ver>.zip`（内含 `.dmg`） | 平台无关的 Java 代码、插件、模块、`product-info.json`、`UxTestService` | 华为官网 Mac 版 |
+| `commandline-tools-linux-x64-<ver>.zip` | 鸿蒙 SDK，`node`/`hvigor`/`ohpm`/`hstack`/`codelinter`/`emulator` 等 Linux 原生工具（**内含符号链接**，必须用 `bsdtar` 解压） | 华为官网 Linux 命令行工具 |
+| `idea-<ideaver>.tar.gz` | Linux JBR、原生启动器 `fsnotifier`、`.so` 原生库 | JetBrains CDN（自动下载，或本地提供） |
 
-Both behaviors are controlled by variables at the top of the PKGBUILD:
+> 华为两个链接是签名且会过期的，需你手动从
+> <https://developer.huawei.com/consumer/cn/deveco-studio/> 下载，无需重命名
+> （可直接把下载地址或文件路径传给脚本，见下文「用法」）。
+> IDEA 源**默认由脚本从 Mac 的 `buildNumber` 自动解析**，一般无需手动处理；
+> 如需手动下载，Linux 版下载页面为 <https://www.jetbrains.com/idea/download/?section=linux>。
 
-- `_expose_cli_tools=true` — set to `false` to keep the tools out of
-  `/usr/bin` entirely (they stay under `/opt/devecostudio/tools/bin/` and
-  can still be called by full path).
-- `_hprefix_generic_tools=true` — set to `false` to drop the `h` prefix
-  and expose `codelinter` / `Emulator` under their original names (which
-  may collide with other packages).
+## IDEA 版本自动解析（无需手填）
 
-## Emulator
+IDEA 基线**不再手填**。Mac DMG 的 `product-info.json` 带有 `buildNumber`
+（如 `261.23567.138.36.2600621`），其前三段 `261.23567.138` 正好是某个
+IntelliJ IDEA release 的 `build` 字段（→ `2026.1.1`）。脚本据此：
 
-The emulator works, but before first use you must accept the software
-agreements and
-download the system images. For example:
+1. 读 `buildNumber`，取前三段；
+2. 查 JetBrains releases feed，找到匹配的 IDEA 版本 → 得到分支 `2026.1`；
+3. 取该分支**最新 patch**（如 `2026.1.5`，而非 `.1`），直接读其
+   `downloads.linux.link` 下载。
 
-    # List available images
-    hemulator -imageList
+下个月 `2026.1.6` 发布时会自动取用——**除非你用 `-a` 显式覆盖**：
 
-    # Phone images only
-    hemulator -imageList -deviceType phone
+```bash
+./build.sh --mac ... --cli ... --ideaver 2026.1.5   # 可选覆盖，跳过自动探测
+```
 
-    # Use jq for a concise list
-    hemulator -imageList -deviceType phone | jq '.[].osVersion'
+构建时脚本会回显 **组件版本对照表**（DevEco 版本 / IDEA 构建号 / JBR 版本
+Mac vs IDEA 三列并排），破坏性差异（如 Mac 自带 JBR 21 而 IDEA 是 25）会
+**整行标红**并告警，防止窜台；随后还会审核 Mac `build.txt` 与 IDEA tarball
+`build.txt` 的构建号前缀一致性，不一致直接中止。
 
-    # Install an image
-    hemulator -install -deviceType phone -osVersion "HarmonyOS 6.1.1(24)"
+## 目录布局
 
-Once installed, you can create, manage and start emulators from the
-IDE's Device Manager.
+所有产物固定写在脚本同级的 **`build/`** 目录下：
 
-## Previewer
+```
+build/
+├── cache/   # 下载的源归档（devecostudio-mac.zip、commandline-tools-linux-x64.zip、idea-*.tar.gz），跨次复用
+├── work/    # 中间解压产物（mac_dmg/、cli/、idea/、devecostudio-<ver>/），跨次复用，避免重复解压
+└── out/     # 最终产物（tarball，可选 install-cli-tools.sh）
+```
 
-The previewer is unavailable. Huawei has not yet ported the Rosen
-rendering engine to Linux.
+- 中间产物**默认保留**：第二次用本地包构建时直接复用 `build/work/` 与
+  `build/cache/`，不再解压、不再下载，省时省资源。
+- 想强制重新解压/下载：`./build.sh --clear-all` 清除 `build/work/` 与
+  `build/cache/` 后退出（最终产物 `build/out/` 保留）。
+- 仅清除整合包（保留解压源与下载缓存）：`./build.sh --clear-build`。
 
-## What happens under the hood
+## 用法
 
-The PKGBUILD extracts the Mac DMG and takes the platform-independent parts
-— JARs, plugins, modules. The SDK and CLI tools (hvigor, ohpm, node,
-emulator, …) come from Huawei's Linux Command Line Tools instead. Then the
-macOS-specific bits (launcher, JBR, native libraries) are replaced with
-their Linux counterparts from IntelliJ IDEA. The vmoptions and
-product-info.json are transformed on the fly so the IDE knows it's running
-on Linux.
+`-m` / `-c` / `-i` 既可传**本地路径**，也可传 **`http(s)://` 下载地址**，脚本自动判断：
 
-The result is a native-feeling DevEco Studio that runs without Wine or
-containers.
+- 以 `http://` 或 `https://` 开头 → 视为 URL，下载并缓存到 `build/cache/`；
+- 否则视为本地路径，文件必须存在（不存在直接报错退出）。
 
-Why repackage from the Mac version? Huawei distributes DevEco Studio for
-Windows, macOS, and Linux. The Linux distribution has two problems: the
-installer is an `.exe` that is hard to extract, and the packaged version
-lags behind in updates. The Mac DMG is trivially extractable and contains
-all the cross-platform files we need.
+### 1. 本地包传入（推荐用于反复测试）
 
-The only truly platform-specific things we swap out are:
-- The Java runtime (JBR) — macOS → Linux
-- The native launcher binary (and `fsnotifier`)
-- Shared libraries (.so files)
-- The SDK and CLI tools — taken from the Linux Command Line Tools
+```bash
+./build.sh \
+    --mac  devecostudio-mac.zip \
+    --cli  commandline-tools-linux-x64.zip \
+    --idea idea-2026.1.5.tar.gz
+```
 
-Everything else — the Java code, plugins, templates — is
-platform-independent.
+- 未传入的源才会从网络下载，且下载后缓存到 `build/cache/`，下一次直接复用。
+- 只想本地测、**完全不下载**：加 `--no-download`，缺任何一个本地文件就报错退出。
+- 版本号省略时，自动从 Mac 源文件名/地址中提取（如 `devecostudio-mac-26.0.0.621.zip`
+  提取出 `26.0.0.621`）。
+- 覆盖 IDEA 版本（可选）：`--ideaver 2026.1.5`，否则按上述规则自动解析。
 
-### The emulator
+### 2. 直接给下载地址（或混合）
 
-Three emulator-related quirks deserve a mention.
+`-m` / `-c` 直接传华为链接即可；`-i` 省略时按自动解析的 IDEA 版本从
+JetBrains CDN 拼出下载地址：
 
-First, Huawei's code only
-distinguishes Mac from non-Mac, and the non-Mac branch hardcodes the
-`Emulator.exe` filename. On Linux that file does not exist, which broke the
-Device Manager and debugging. The package fixes this with a symlink:
-`Emulator.exe -> Emulator` in `tools/emulator/`.
+```bash
+./build.sh \
+    --mac  "https://.../devecostudio-mac-26.0.0.621.zip" \
+    --cli  "https://.../commandline-tools-linux-x64-26.0.0.621.zip"
+```
 
-Second, system images must be downloaded manually because of how the
-official installer works: when the emulator is missing, its wizard downloads
-the binary *and* the system image together. Since this package bundles the
-binary, the IDE thinks the emulator is installed and never offers the
-wizard, leaving the system image as the only missing piece — see the
-Emulator section above for how to get one.
+本地路径与 URL 也可混用，例如本地 Mac 包 + 远程 CLI 工具。
 
-Third, the emulator's software agreements: the IDE launches the emulator
-binary directly, and if the agreements were never accepted it waits
-silently for a `y`. The `Emulator` wrapper auto-accepts them on first use
-(`hemulator ...` when `~/Library/Caches/Huawei/Emulator26.0/.emu_config`
-does not exist runs `-license accept` and exits), so by the time you use
-the IDE the agreements are in place. To opt out of the auto-accept,
-truncate that `.emu_config` file.
+### 3. 产出
 
-### Wayland
+```
+build/out/devecostudio-<pkgver>-linux-x86_64.tar.gz
+```
 
-Most of the IDE runs fine under Wayland, but the CEF-based user interfaces
-— the project structure dialog, markdown preview, and similar — crash their
-GPU process under Wayland (`eglCreateWindowSurface` segfault). The launcher
-wrapper works around this by forcing the X11 backend by default
-(`unset WAYLAND_DISPLAY`, `GDK_BACKEND=x11`), which makes every CEF page
-render correctly through XWayland.
+解压即用：
 
-If you prefer to run under Wayland natively, set
-`DEVECO_DISABLE_X11_WORKAROUND=1` before launching — but expect the CEF
-pages to be blank or broken.
+```bash
+tar -xzf devecostudio-<pkgver>-linux-x86_64.tar.gz -C ~/apps
+~/apps/devecostudio-<pkgver>/bin/devecostudio.sh
+```
 
-The launcher also enables JCEF's headless + out-of-process rendering by
-default (equivalent to `ide.browser.jcef.headless.enabled` and
-`ide.browser.jcef.out-of-process.enabled` in the registry), which fixes
-blank CEF pages in some environments. Set `DEVECO_DISABLE_JCEF_HEADLESS=1`
-before launching to opt out.
+### 4. 构建、打包、安装分两步（可复用）
 
-### HiDPI
+脚本把「最后一步」拆成 **打包 tar.gz** 与 **安装到指定目录** 两个动作，二者
+都基于同一个已组装好的应用树（`build/work/devecostudio-<pkgver>/`）：
 
-XWayland does not report per-monitor scale to the JVM (it reports 1.0), so
-on a HiDPI screen the IDE would lock its UI scale to 1.0 — too small. The
-launcher reads the compositor's real scale (`wlr-randr`), rounds it to the
-nearest quarter step, and injects it as `-Dide.ui.scale` via a user
-vmoptions overlay.
+| 目标 | 参数 | 说明 |
+|---|---|---|
+| 打包成 tar.gz（默认） | _(不加任何开关)_ | 产出 `build/out/devecostudio-<pkgver>-linux-x86_64.tar.gz` |
+| 直接安装到目录 | `--install DIR` | 把应用树复制到 `DIR`（成为应用根目录，含 `bin/`、`jbr/` 等），本地使用免打包 |
+| 安装的同时跳过打包 | `--install DIR --no-package` | 本地调试最省时：只组装 + 复制，不生成 tar.gz |
+| 两者都做 | `--install DIR` | 既安装又打包 |
 
-Override the value or disable the detection:
+典型用法：
 
-    DEVECO_UI_SCALE=1.2 devecostudio   # use 1.2 as-is
-    DEVECO_UI_SCALE=off devecostudio   # leave scaling to the JVM
+```bash
+# 只想本地用，不打包（最快）：组装后直接装到 ~/apps/devecostudio
+./build.sh --mac devecostudio-mac.zip \
+    --cli commandline-tools-linux-x64.zip \
+    --install ~/apps/devecostudio --no-package
 
-You can also set the scale manually via the IDE's *Help → Edit Custom VM
-Options*. For more, see [the IDEA HiDPI
-documentation](https://intellij-support.jetbrains.com/hc/en-us/articles/360007994999-HiDPI-configuration).
+# 运行
+~/apps/devecostudio/bin/devecostudio.sh
+```
 
-### Some magic
+> 组装树（`build/work/devecostudio-<pkgver>/`）跨次复用：第一次用本地包
+> 构建后，后续 `--install` / 打包直接复用，无需重新解压。要强制重来用
+> `--clear-all`。
 
-For the sake of brevity, you can check [DETAILS.md](DETAILS.md) to learn about other magic used in this project.
+## CLI 工具是否在 PATH 上
 
-## License situation
+默认**不**把 `hvigorw`/`ohpm`/`hstack`/`codelinter`/`Emulator` 链入系统
+`/usr/bin`（通用包不应擅自改动系统路径）。它们始终在
+`<解压目录>/tools/bin/` 下，IDE 运行时会自己找到。
 
-This project is not affiliated with or endorsed by Huawei.
+若你希望把它们暴露到 PATH，加 `--expose-cli`：
 
-DevEco Studio is a commercial product owned by Huawei. Before using it, you agree to the HUAWEI DevEco Studio User Agreement (reproduced in LICENSE.huawei). A few clauses worth noting:
+```bash
+./build.sh --mac ... --cli ... --expose-cli
+```
 
-- **Clause 1.6** grants a "limited, non-exclusive, free, non-transferable, non-sublicensable, and revocable" license to use DevEco Studio solely for developing applications that run on OpenHarmony-compatible devices and/or HarmonyOS.
-- **Clause 1.7(f)** prohibits copying or modifying the service, or merging any part of it with other programs.
-- **Clause 1.7(h)** prohibits reverse engineering, decompiling, or creating derivative works.
-- **Clause 1.7(i)** prohibits distributing, selling, or transferring the service.
+这会额外在 `build/out/` 生成一个 `install-cli-tools.sh`，运行（需 root）后把工具
+链到 `/usr/local/bin`（其中 `codelinter`/`Emulator` 默认加 `h` 前缀：
+`hcodelinter`/`hemulator`）。
 
-This packaging project extracts platform-independent files from the Mac DMG and recombines them with Linux-native components (launcher, JBR, native libraries) from IntelliJ IDEA. The Java bytecode and resources are not modified, but configuration files are transformed. This likely constitutes "modification" and "merging" under clauses 1.7(f) and 1.7(h).
+## 依赖
 
-What this means in practice:
-- Building this package for personal use is what the author does, and the project exists to document that process.
-- Distributing the resulting package to others is likely not permitted under Huawei's terms.
-- If you have legal concerns, consult Huawei's official licensing at https://developer.huawei.com/consumer/cn/deveco-studio/ and your own legal counsel.
+- `bash`（构建脚本本身，仅 Linux）
+- 外部工具：`7z`（p7zip，解 Mac DMG）、**`bsdtar`（解 CLI zip，必须能保留符号链接）**、
+  `jq`、`tar`、`strip`、`curl` 或 `wget`（下载）
 
-### Licensing of the packaging scripts
+  > `bsdtar` 来自 libarchive 项目。发行版打包不同：Arch 上随 `libarchive` 包提供，
+  > 而 **Fedora / RHEL 上是独立包 `bsdtar`**（仅靠 `libarchive` 库包不会装到该命令），
+  > 需用 `sudo dnf install bsdtar` 安装。Debian/Ubuntu 上同样有独立包 `bsdtar`。
+- 运行时系统库（解压后运行需要）：`libxss` `libxtst` `nss` `alsa-lib`
+  `libxcrypt-compat` `freetype2` `libpulse`；中文输入法需 `fcitx5`
 
-The files that make up this packaging project are provided under the BSD 2-Clause license.
+> 为什么 CLI zip 必须用 `bsdtar`：`7z` 会因 zip 内含的「危险链接」直接拒绝解压
+> （exit 2），`unzip` 则会把符号链接（如 `node/bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js`、
+> `llvm/bin/clang++ -> clang`）损坏成普通文本文件，导致 IDE 同步失败。只有
+> `bsdtar`（libarchive）能正确保留符号链接。
 
-They are not part of DevEco Studio and carry no restrictions from Huawei's terms.
+## 与 arch/ 下 PKGBUILD 的关系
 
-### Licensing of bundled components
+`arch/PKGBUILD` 仍保留给 Arch 用户使用，两者并存。`build.sh` 不产出
+`*.pkg.tar.zst`，也不产出 `.desktop`。所有平台相关的逆向/适配细节见
+[`AGENTS.md`](AGENTS.md)（原本在 `DETAILS.md`，已整理移至此处）。
 
-- DevEco Studio itself and its plugins are proprietary works of Huawei.
-- JetBrains Runtime (JBR) is GPLv2 with the classpath exception, based on OpenJDK.
-- IntelliJ IDEA Community components are available under Apache 2.0.
-- Various third-party libraries bundled with DevEco Studio carry their own licenses.
+## 已知限制
+
+- **Previewer（预览器）在 Linux 上不可用**：华为未移植 Rosen 渲染引擎。
+- 模拟器系统镜像需手动下载（见下）。
+- 仅测试过默认值对应的版本；换版本请自行验证。
+
+## 模拟器运行注意事项（Linux 特有问题，已打包层处理）
+
+DevEco 的模拟器在 Linux 上有几个上游怪癖，`build.sh` 已在启动器
+`bin/devecostudio.sh` 与权限修复中处理，这里记录以便维护时理解。
+
+### 1. Emulator 二进制需要执行权限
+
+`tools/emulator/Emulator` 是 360M+ 的 Linux 原生 ELF，但 CLI zip 解压后
+可能不带执行位。权限修复除按 ELF 魔法字节扫描补 `+x` 外，还会对
+已知原生二进制（`tools/emulator/Emulator`、`bin/fsnotifier`、`bin/devecostudio`）
+**显式 `chmod +x`**，避免超大文件字节扫描偶发漏判导致模拟器无法启动。
+
+> `tools/bin/Emulator` 与 `tools/emulator/Emulator` 不是重复文件：前者是
+> CLI 工具链里的 **bash 包装脚本**（修复路径、补桥接与协议自动接受后转发），
+> 后者才是**真实二进制**。
+
+### 2. 系统镜像目录必须真实存在（`~/Library/Huawei/Sdk` 软链桥）
+
+Emulator 二进制**硬编码** macOS 风格路径 `$HOME/Library/Huawei/Sdk` 作为系统
+镜像目录（上游闭源，无法改）。启动器在建立软链前会先
+`mkdir -p "$HOME/.Huawei/Sdk"`，再 `ln -sfn` 把它桥到 `~/Library/Huawei/Sdk`，
+从而：Emulator 按硬编码路径读写，真实数据落在 Linux 习惯的 `~/.Huawei/Sdk`。
+
+**注意**：`$HOME/.Huawei/Sdk` 真实目录必须先存在，否则软链悬空，Emulator
+下载镜像时会报 `can not open or write file`。启动器已自动建好；若你**绕过
+启动器直接跑 `Emulator`**，需自行 `mkdir -p ~/.Huawei/Sdk`。
+
+### 3. 系统镜像需手动下载
+
+模拟器二进制只随 CLI 提供，系统镜像不会自动带。下载（匿名、挑 phone 设备）：
+
+```bash
+~/.local/devecostudio/tools/emulator/Emulator -install -deviceType phone -osVersion "HarmonyOS 6.1.1(24)"
+```
+
+镜像落到 `~/.Huawei/Sdk/system-image/`（经软链即 `~/Library/Huawei/Sdk/system-image/`）。
+可用版本用 `-imageList` 查询。
+
+### 4. Qt 平台插件必须是 xcb（不是 wayland）
+
+模拟器只自带 `libqxcb.so`（X11/xcb 平台插件），**没有** wayland 插件。
+在 Wayland 会话里环境变量通常带 `WAYLAND_DISPLAY`，Qt 会默认去找 wayland
+插件，于是启动即报：
+
+```
+qt.qpa.plugin: Could not find the Qt platform plugin "wayland" in ""
+```
+
+修复：强制 Qt 用 xcb，`QT_QPA_PLATFORM=xcb`。本脚本在两处都设好了：
+
+- IDE 启动器 `bin/devecostudio.sh`（`export QT_QPA_PLATFORM=xcb`）；
+- `tools/bin/Emulator` 包装脚本（`patch_emulator_wrapper` 注入
+  `export QT_QPA_PLATFORM=xcb`）。
+
+**注意**：若你直接调用真实二进制 `tools/emulator/Emulator`（绕过包装脚本），
+需自己 `export QT_QPA_PLATFORM=xcb`，否则会撞上面的 wayland 错误。
+
+### 5. Device Manager 左侧列表在 Linux 上空白（含破坏性陷阱）
+
+DevEco 的 Device Manager 图形界面依赖华为云下发的预设设备模板/规格，这部分在
+Linux 构建里不随包提供，因此 IDE 内打开 Device Manager 时左侧「本地模拟器列表」
+与「规格选择」为空、无法在 GUI 里创建模拟器。这是上游 Linux 构建的固有限制，
+打包层无法补齐。
+
+**破坏性陷阱（重要）**：在 Linux 上打开 Device Manager 图形界面，IDE 会
+**重写** `~/.Huawei/Emulator/deployed/` 目录，把其中用 CLI 创建的本地模拟器
+（如 `myPhone`）一并清空。现象是「我的设备」处没有可选项、CLI `-list` 返回
+`[Empty]`。因此：
+
+- **不要打开 IDE 的 Device Manager 来管理已存在的 CLI 模拟器**，否则设备会被静默删除；
+- 若已被清空，从备份恢复 `deployed/` 下对应的 `<设备名>/`、`<设备名>.ini`、`lists.json` 即可。
+
+绕过方式：用 CLI 创建/启动/停止模拟器（包装脚本已处理路径与 xcb）：
+
+```bash
+hemulator -create myPhone -deviceType phone -osVersion "HarmonyOS 6.1.1(24)"
+hemulator -start   myPhone
+hemulator -stop    myPhone
+hemulator -list
+```
+
+模拟器窗口正常弹出后，IDE 的 Run/Debug 面板即可选它作为运行目标。
+
+## License 说明
+
+本项目与华为无隶属或背书关系。DevEco Studio 是华为的商业产品，使用前须同意
+《HUAWEI DevEco Studio User Agreement》。打包脚本抽取 Mac DMG 中的平台无关文件，
+并与来自 IntelliJ IDEA 的 Linux 原生组件（启动器、JBR、原生库）重新组合，
+配置被转换——这可能构成协议下的"修改"与"合并"。
+
+- 个人构建使用属项目初衷；
+- 向他人分发构建产物很可能违反华为条款，请咨询官方授权与法务。
+
+打包脚本文件本身以 BSD 2-Clause 许可提供，不受华为条款约束。

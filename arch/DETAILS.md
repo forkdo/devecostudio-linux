@@ -10,7 +10,7 @@ view; this is the developer-facing view.
 | Source | What it provides | Why |
 |---|---|---|
 | **Mac DMG** (`devecostudio-mac.zip`) | `lib/*.jar`, `plugins/`, `modules/`, `license/`, `build.txt`, `bin/devecostudio.svg`, `bin/idea.properties`, `bin/devecostudio.vmoptions`, `Resources/product-info.json`, `tools/UxTestService` | Huawei ships DevEco Studio for Windows, macOS, and Linux. The Windows installer is an `.exe` that is painful to extract and lags in version; the Mac DMG extracts trivially with `7z x` and all of these files are platform-independent (Java bytecode, resources, templates). |
-| **JetBrains IDEA tarball** (`idea-${_ideaver}.tar.gz`) | `jbr/`, `bin/idea` launcher, `bin/fsnotifier`, `lib/native/linux-x86_64/`, `lib/pty4j/linux/`, `lib/jna/amd64/`, `lib/skiko-awt-runtime-all/` | The macOS-specific bits (JBR, launcher, native `.so`s) are replaced with Linux ones. DevEco's build number is pinned to a specific IDEA baseline — see "IDEA version matching" below. |
+| **JetBrains IDEA tarball** (`idea-<resolved>.tar.gz`) | `jbr/`, `bin/idea` launcher, `bin/fsnotifier`, `lib/native/linux-x86_64/`, `lib/pty4j/linux/`, `lib/jna/amd64/`, `lib/skiko-awt-runtime-all/` | The macOS-specific bits (JBR, launcher, native `.so`s) are replaced with Linux ones. DevEco's build number is pinned to a specific IDEA baseline. The exact IDEA version is **no longer pinned by hand** — `prepare()` derives it from the Mac DMG's `buildNumber` and fetches the **latest patch** of that branch automatically (see "IDEA version auto-resolution" below). |
 | **Command Line Tools for Linux** (`commandline-tools-linux-x64.zip`) | `sdk/`, `tool/node/`, `hvigor/`, `ohpm/`, `hstack/`, `codelinter/`, `emulator/`, `bin/` wrappers | The CLI zip already contains Linux-native versions of every tool, and its SDK is the one the IDE needs. |
 
 Everything from the Mac DMG that is not on the list above is either
@@ -21,9 +21,45 @@ platform-native (and unusable on Linux) or duplicated by the CLI: `jbr`,
 
 The two Huawei zips are **user-supplied** (Huawei's download links are
 signed and expire), renamed to version-independent filenames
-(`devecostudio-mac.zip`, `commandline-tools-linux-x64.zip`). Only the IDEA
-tarball is auto-downloaded. Checksums live in `sha256sums`; users changing
-versions update `pkgver` + the two checksums (or use `SKIP`).
+(`devecostudio-mac.zip`, `commandline-tools-linux-x64.zip`). The IDEA
+tarball is **also** pulled automatically (see auto-resolution below) unless
+you pass a local one via `_use_local_idea=true`. Checksums live in
+`sha256sums`; users changing versions update `pkgver` + the two Huawei
+checksums (or use `SKIP`). The IDEA tarball is never checksum-verified here
+because its version is resolved at build time.
+
+## IDEA version auto-resolution
+
+The IDEA baseline is no longer a hand-set `_ideaver`. The Mac DMG's
+`product-info.json` carries `buildNumber` (e.g. `261.23567.138.36.2600621`).
+Its first three dot-segments (`261.23567.138`) are exactly an IntelliJ IDEA
+release's `build` field — here `2026.1.1`. `prepare()` uses JetBrains'
+release feed as the single source of truth:
+
+1. Read `buildNumber`, take `261.23567.138`.
+2. Query JetBrains' release feed
+   (`data.services.jetbrains.com/products/releases?code=IIU&type=release`)
+   and find the IDEA version whose `build` starts with that prefix →
+   `2026.1.1`. That tells us the **major.minor branch** DevEco was built
+   against (`2026.1`).
+3. From the same feed, pick the **highest patch** of that branch and read its
+   `downloads.linux.link` directly → `2026.1.5`
+   (`https://download.jetbrains.com/idea/idea-2026.1.5.tar.gz`). We take the
+   latest patch, not the exact `.1`, because JBR / native libs only need to
+   match the branch and a newer patch is strictly safer. Next month, when
+   `2026.1.6` is published, this step picks it up automatically — no PKGBUILD
+   edit needed.
+4. Download and extract that tarball.
+
+No hardcoded 261→2026.1 table is needed: the feed maps build prefix → version
+directly. This also removes the `-a / --ideaver` argument entirely.
+
+**Local IDEA override** (`_use_local_idea=true`): skip the network query;
+use a tarball named `idea-<version>.tar.gz` placed next to the PKGBUILD.
+Consistency is still audited against the Mac `buildNumber` (the local
+tarball's `build.txt` is compared); a mismatch aborts unless `_idea_force=true`.
+This is the migration path for the old `--ideaver`
+argument — but note the resolved version is derived, not supplied.
 
 ## The magic, by area
 
@@ -360,11 +396,12 @@ The wrapper (devecostudio.sh) responsibilities, in order:
 2. **Analyze the actual layouts first** (rule: never trust paths inherited
    from the previous release): `7z l`/`7z x` the DMG, diff `lib/`,
    `plugins/`, `tools/`, and read the new `Resources/product-info.json`
-   (buildNumber → baseline IDEA version → `_ideaver`). Upstream moves
-   things between versions — e.g. 26.0.0 flattened all jars into `lib/`
-   and removed `lib/modules` + `lib/cds`, and added
-   `lib/skiko-awt-runtime-all` and `tools/dumpParser` (Mach-O, excluded).
-3. Update `pkgver`, `_ideaver`, and the two Huawei zip `sha256sums`.
+   (buildNumber → auto-resolved IDEA baseline, see "IDEA version
+   auto-resolution"). Upstream moves things between versions — e.g. 26.0.0
+   flattened all jars into `lib/` and removed `lib/modules` + `lib/cds`, and
+   added `lib/skiko-awt-runtime-all` and `tools/dumpParser` (Mach-O, excluded).
+3. Update `pkgver` and the two Huawei zip `sha256sums`. The IDEA version
+   resolves itself from the Mac `buildNumber` — no manual `_ideaver` edit.
 4. `makepkg -f`, install, and run the test checklist below.
 
 ### Test checklist (after build)

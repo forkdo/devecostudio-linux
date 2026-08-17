@@ -16,8 +16,18 @@
 pkgname=devecostudio
 pkgdesc='Huawei DevEco Studio repackaged for Arch Linux'
 pkgver=26.0.0.621
-_ideaver=2026.1.3
 pkgrel=7
+# ── IDEA baseline (auto-derived) ──
+# The IntelliJ IDEA version is NOT set by hand. prepare() reads the Mac DMG's
+# buildNumber, finds the IDEA release whose build prefix matches (that gives
+# the exact IDEA version DevEco Studio was built against), then picks the
+# LATEST patch of that same major.minor branch (e.g. 2026.1.1 -> 2026.1.5).
+# To bypass the download and build from a local tarball instead, set
+# _use_local_idea=true and place idea-<version>.tar.gz next to this PKGBUILD.
+# Consistency is still audited; if the local tarball's build doesn't match the
+# Mac DMG's baseline, the build aborts unless _idea_force=true.
+_use_local_idea=false
+_idea_force=false
 # ── CLI tool exposure ──
 # The bundled Huawei CLI tools (hvigorw, ohpm, hstack, codelinter, Emulator)
 # live under /opt/devecostudio/tools/bin/. Set _expose_cli_tools=false to
@@ -41,12 +51,15 @@ depends=(
 optdepends=(
   'fcitx5: Chinese input method support for JBR JCEF'
 )
-makedepends=('jq' 'p7zip')
+makedepends=('jq' 'p7zip' 'curl')
 options=('!strip')
+# The IntelliJ IDEA tarball is intentionally NOT in `source()` — its exact
+# version is derived from the Mac DMG's buildNumber inside prepare() (we want
+# the LATEST patch of the matching IDEA branch, not a pinned version). When
+# _use_local_idea=true, prepare() uses a local tarball instead of downloading.
 source=(
   "devecostudio-mac.zip"
   "commandline-tools-linux-x64.zip"
-  "idea-${_ideaver}.tar.gz::https://download.jetbrains.com/idea/idea-${_ideaver}.tar.gz"
   "devecostudio.desktop"
 )
 sha256sums=(
@@ -81,12 +94,114 @@ prepare() {
     exit 1
   fi
 
-  # ── Locate auto-extracted sources ──
+  # ── Report Mac DMG identity & upstream IDEA baseline ──
+  # product-info.json carries both the DevEco Studio version and the IntelliJ
+  # platform buildNumber. The buildNumber's first three dot-segments
+  # (e.g. 261.23567.138) are the IDEA baseline the Mac build was compiled
+  # against; the leading segment (261) is the IDEA major (2026.1).
+  _deveco_ver=$(jq -r '.version' "$_mac/Resources/product-info.json")
+  _build_number=$(jq -r '.buildNumber' "$_mac/Resources/product-info.json")
+  _idea_major=$(echo "$_build_number" | cut -d. -f1)
+  _idea_branch=$(echo "$_build_number" | cut -d. -f1-3)
+  msg "DevEco Studio version : $_deveco_ver"
+  msg "Mac buildNumber      : $_build_number"
+  msg "Upstream IDEA baseline: major=$_idea_major  branch=$_idea_branch"
+
+  # ── Resolve the matching IDEA release (latest patch of the Mac's branch) ──
+  # The Mac buildNumber's first three segments (e.g. 261.23567.138) equal an
+  # IDEA release's build exactly (here 2026.1.1). We resolve which IDEA version
+  # that is, then take the LATEST patch of its major.minor branch (2026.1 -> 2026.1.5).
+  msg2 "Resolving matching IntelliJ IDEA release..."
+  if [[ "$_use_local_idea" == "true" ]]; then
+    # Local tarball mode: discover the version from the filename the user placed.
+    _idea_tar=$(find "$PWD" -maxdepth 1 -type f -name 'idea-*.tar.gz' | head -1)
+    if [[ -z "$_idea_tar" ]]; then
+      error "Local IDEA mode: place idea-<version>.tar.gz next to the PKGBUILD."
+      exit 1
+    fi
+    _ideaver=$(basename "$_idea_tar" | sed -E 's/^idea-//; s/\.tar\.gz$//')
+    msg "Local IDEA tarball  : $(basename "$_idea_tar")"
+    cp -a "$_idea_tar" "$srcdir/"
+  else
+    # Auto mode. JetBrains' release feed is the single source of truth:
+    #  - it maps the Mac buildNumber -> the exact IDEA version DevEco was
+    #    built against (e.g. 261.23567.138 -> 2026.1.1), giving the branch;
+    #  - it also lists every release of that branch with its download URL,
+    #    so we take the LATEST patch directly (2026.1 -> 2026.1.5). Next
+    #    month 2026.1.6 is picked up automatically — no PKGBUILD edit.
+    _feed_json="$srcdir/idea_feed.json"
+    curl -s --fail -L -o "$_feed_json" \
+      "https://data.services.jetbrains.com/products/releases?code=IIU&type=release" \
+      || { error "Failed to fetch IDEA release feed (no network? set _use_local_idea=true)."; exit 1; }
+    # Branch: the IDEA version whose build prefix equals the Mac buildNumber prefix.
+    _matched_ver=$(jq -r --arg bn "$_idea_branch" '
+      .IIU[]
+      | select(.build | startswith($bn))
+      | .version' "$_feed_json" | head -1)
+    if [[ -z "$_matched_ver" ]]; then
+      error "No IDEA release found matching Mac buildNumber prefix $_idea_branch."
+      error "The Mac DMG may predate / postdate known IDEA releases."
+      exit 1
+    fi
+    _branch_mm=$(echo "$_matched_ver" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+    msg "Matched IDEA version: $_matched_ver (Mac built against this)"
+    msg "IDEA branch         : $_branch_mm"
+    # Latest patch of that branch, with its download URL straight from the feed.
+    _resolved=$(jq -r --arg mm "$_branch_mm" '
+      [ .IIU[]
+        | select(.version | startswith($mm))
+        | {v:.version, link:.downloads.linux.link} ]
+      | sort_by(.v | split(".") | map(tonumber))
+      | last
+      | "\(.v)\t\(.link)"' "$_feed_json")
+    _ideaver=$(echo "$_resolved" | cut -f1)
+    _idea_url=$(echo "$_resolved" | cut -f2)
+    if [[ -z "$_ideaver" || "$_ideaver" == "null" || -z "$_idea_url" ]]; then
+      error "No IDEA $_branch_mm.* release with a Linux tarball found in the feed."
+      exit 1
+    fi
+    msg "Resolved IDEA latest: $_ideaver (latest patch of branch $_branch_mm)"
+    msg "Downloading $_idea_url"
+    curl -s --fail -L -o "$srcdir/idea-${_ideaver}.tar.gz" "$_idea_url" \
+      || { error "IDEA download failed: $_idea_url"; exit 1; }
+  fi
+  msg "IntelliJ IDEA version : $_ideaver"
+
+  # ── Extract the IDEA tarball (makepkg did not, since it's not in source()) ──
+  msg2 "Extracting IntelliJ IDEA tarball..."
+  tar -xzf "$srcdir/idea-${_ideaver}.tar.gz" -C "$srcdir" \
+    || { error "Failed to extract IDEA tarball"; exit 1; }
   _idea=$(find "$srcdir" -mindepth 1 -maxdepth 1 -type d -name 'idea-IU-*' | head -1)
   if [[ ! -d "$_idea" ]]; then
-    error "IntelliJ IDEA not found (macro error)"
+    error "IntelliJ IDEA not found after extraction (macro error)"
     ls "$srcdir/"
     exit 1
+  fi
+
+  # ── Audit Mac ↔ IDEA consistency ──
+  # The IDEA tarball's build.txt (e.g. "IU-261.23567.123") is the definitive
+  # baseline it provides. Compare its major+branch against the Mac DMG's
+  # buildNumber. A mismatch means the IDEA tarball does not match what DevEco
+  # Studio was built against — the JBR / native libs may be incompatible.
+  _idea_build=$(cat "$_idea/build.txt" 2>/dev/null | tr -d '[:space:]' | sed 's/^IU-//')
+  if [[ -z "$_idea_build" ]]; then
+    error "Could not read IDEA build.txt from $_idea"
+    exit 1
+  fi
+  _idea_build_branch=$(echo "$_idea_build" | cut -d. -f1-3)
+  msg "IDEA tarball build   : $_idea_build"
+  if [[ "$_idea_build_branch" != "$_idea_branch" ]]; then
+    error "IDEA baseline MISMATCH:"
+    error "  Mac DMG expects : $_idea_branch (buildNumber $_build_number)"
+    error "  IDEA tarball is : $_idea_build_branch (build.txt $_idea_build)"
+    if [[ "$_idea_force" == "true" ]]; then
+      warning "Overriding mismatch check (_idea_force=true). The resulting package may be unstable."
+    else
+      error "Aborting. Pass _idea_force=true to override, or supply the matching IDEA tarball."
+      exit 1
+    fi
+  else
+    msg "IDEA baseline match  : OK ($_idea_branch)"
   fi
 
   _cli="$srcdir/command-line-tools"

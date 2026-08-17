@@ -55,7 +55,7 @@ IntelliJ IDEA 的 tarball 会自动从 JetBrains CDN 下载。
 
 1. 查看 PKGBUILD 中期望的文件名（文件名不含版本号，只需重命名一次下载文件），
 2. 下载所需版本，重命名为固定文件名，然后更新 `pkgver` 和两个 SHA256 校验值（如果不想校验，可设为 `"SKIP"`），
-3. 也可以修改 `_ideaver` 换用不同的 IDEA 基础版本。
+3. IDEA 基础版本会根据 Mac DMG 的 `buildNumber` 自动推导，通常无需手动设置。若想改用本地 IDEA 包，请使用 `_use_local_idea=true`（见上文）。
 
 只有 `pkgver` 中的版本经过测试——如果你做了修改，请自行测试结果。
 

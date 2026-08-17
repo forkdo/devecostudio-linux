@@ -51,7 +51,7 @@ jobs:
           chown -R builder:builder devecostudio
 
       - name: Apply version and checksum overrides
-        working-directory: devecostudio
+        working-directory: devecostudio/arch
         run: |
           if [[ -n "${{ inputs.pkgver }}" ]]; then
             sed -i "s/^pkgver=.*/pkgver=${{ inputs.pkgver }}/" PKGBUILD
@@ -69,7 +69,7 @@ jobs:
           fi
 
       - name: Download source archives
-        working-directory: devecostudio
+        working-directory: devecostudio/arch
         run: |
           curl -fL \
             -o devecostudio-mac.zip \
@@ -84,12 +84,12 @@ jobs:
       - name: Build package
         run: |
           runuser -u builder -- bash -c '
-            cd devecostudio
+            cd devecostudio/arch
             makepkg -sfc --noconfirm
           '
 
       - name: Create tarball for other distributions
-        working-directory: devecostudio
+        working-directory: devecostudio/arch
         run: |
           if [[ -d pkg/opt/devecostudio ]]; then
             # pkg/opt/devecostudio is the complete /opt/devecostudio tree;
@@ -110,5 +110,5 @@ jobs:
         with:
           name: devecostudio-pkg
           path: |
-            devecostudio/*.pkg.tar.zst
-            devecostudio/devecostudio-*-linux-x86_64.tar.gz
+            devecostudio/arch/*.pkg.tar.zst
+            devecostudio/arch/devecostudio-*-linux-x86_64.tar.gz
